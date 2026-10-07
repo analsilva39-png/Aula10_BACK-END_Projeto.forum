@@ -1,64 +1,40 @@
 <?php
 session_start();
+require_once __DIR__ . '/funcoes.php';
+
 if (!isset($_SESSION['usuario'])) {
-    echo "Você precisa estar logado.";
+    encerrarComErro('Você precisa entrar para excluir um comentário.', 403);
+}
+if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+    encerrarComErro('Método não permitido.', 405);
+}
+if (!csrfValido($_POST['csrf_token'] ?? null)) {
+    encerrarComErro('Formulário expirado. Atualize a página e tente novamente.', 403);
+}
+
+$id = obterIndice($_POST['id'] ?? null);
+$comentarioId = obterIndice($_POST['comentario'] ?? null);
+if ($id === null || $comentarioId === null) {
+    encerrarComErro('Comentário inválido.');
+}
+
+try {
+    $topicos = carregarXml(ARQUIVO_TOPICOS, 'topicos');
+    if (!isset($topicos->topico[$id])) {
+        encerrarComErro('Tópico não encontrado.', 404);
+    }
+    $topico = $topicos->topico[$id];
+    if ((string) $topico->autor !== (string) $_SESSION['usuario']) {
+        encerrarComErro('Somente o autor do tópico pode excluir comentários.', 403);
+    }
+    if (!isset($topico->comentarios->comentario[$comentarioId])) {
+        encerrarComErro('Comentário não encontrado.', 404);
+    }
+
+    unset($topico->comentarios->comentario[$comentarioId]);
+    salvarXml($topicos, ARQUIVO_TOPICOS);
+    header('Location: lista.php');
     exit;
+} catch (RuntimeException $excecao) {
+    encerrarComErro($excecao->getMessage(), 500);
 }
-$topicos = simplexml_load_file("topicos.xml");
-$id = intval($_GET['id']);
-$comentario_id = intval($_GET['comentario']);
-if ($_SESSION['usuario'] == $topicos->topico[$id]->autor) {
-    unset($topicos->topico[$id]->comentarios->comentario[$comentario_id]);
-    $topicos->asXML("topicos.xml");
-}
-header("Location: listar.php");
-
-?>
-
-<style>
-        body {
-            background: #fff3e0;
-            text-align: center;
-        }
-
-        form {
-            background: white;
-            width: 300px;
-            margin: 50px auto;
-            padding: 20px;
-            border-radius: 10px;
-        }
-
-        input {
-            padding: 8px;
-            margin: 5px;
-            width: 90%;
-        }
-
-        button {
-            background: #f57c00;
-            color: white;
-            border: none;
-            padding: 10px 25px;
-            border-radius: 5px;
-            cursor: pointer;
-        }
-
-        button:hover {
-            background: #e65100;
-        }
-    </style>
-
-    <form method="post">
-
-        <h2>Login</h2>
-
-        Email:
-        <input type="email" name="email" required><br>
-
-        Senha:
-        <input type="password" name="senha" required><br>
-
-        <button type="submit">Entrar</button>
-
-    </form>

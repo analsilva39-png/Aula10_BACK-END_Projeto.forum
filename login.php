@@ -1,65 +1,68 @@
 <?php
 session_start();
+require_once __DIR__ . '/funcoes.php';
 
+$erro = '';
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $usuarios = simplexml_load_file("usuarios.xml");
+    $email = strtolower(trim((string) ($_POST['email'] ?? '')));
+    $senha = (string) ($_POST['senha'] ?? '');
 
-    foreach ($usuarios->usuario as $u) {
-        if ($u->email == $_POST['email'] && $u->senha == md5($_POST['senha'])) {
-            $_SESSION['usuario'] = (string)$u->email;
-            echo "Login realizado com sucesso! <a href='criar_topico.php'>Criar Tópico</a>";
-            exit;
+    if ($email === '' || $senha === '') {
+        $erro = 'Informe seu e-mail e sua senha.';
+    } else {
+        try {
+            $usuarios = carregarXml(ARQUIVO_USUARIOS, 'usuarios');
+            foreach ($usuarios->usuario as $usuario) {
+                $hash = (string) $usuario->senha;
+                if (strtolower((string) $usuario->email) !== $email) {
+                    continue;
+                }
+
+                $senhaValida = password_verify($senha, $hash);
+                $senhaLegada = !$senhaValida && hash_equals($hash, md5($senha));
+                if ($senhaValida || $senhaLegada) {
+                    if ($senhaLegada) {
+                        $usuario->senha = password_hash($senha, PASSWORD_DEFAULT);
+                        salvarXml($usuarios, ARQUIVO_USUARIOS);
+                    }
+                    session_regenerate_id(true);
+                    $_SESSION['usuario'] = (string) $usuario->email;
+                    header('Location: lista.php');
+                    exit;
+                }
+                break;
+            }
+            $erro = 'E-mail ou senha incorretos.';
+        } catch (RuntimeException $excecao) {
+            encerrarComErro($excecao->getMessage(), 500);
         }
-    } echo "Login inválido!";
- } else {
+    }
+}
 ?>
-
-    <style>
-        body {
-            background: #fff3e0;
-            text-align: center;
-        }
-
-        form {
-            background: white;
-            width: 300px;
-            margin: 50px auto;
-            padding: 20px;
-            border-radius: 10px;
-        }
-
-        input {
-            padding: 8px;
-            margin: 5px;
-            width: 90%;
-        }
-
-        button {
-            background: #f57c00;
-            color: white;
-            border: none;
-            padding: 10px 25px;
-            border-radius: 5px;
-            cursor: pointer;
-        }
-
-        button:hover {
-            background: #e65100;
-        }
-    </style>
-
-    <form method="post">
-
-        <h2>Login</h2>
-
-        Email:
-        <input type="email" name="email" required><br>
-
-        Senha:
-        <input type="password" name="senha" required><br>
-
-        <button type="submit">Entrar</button>
-
-    </form>
-
-<?php } ?>
+<!doctype html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Entrar</title>
+</head>
+<body>
+<?php exibirEstilos(); ?>
+<form method="post" action="login.php">
+    <h1>Entrar no fórum</h1>
+    <?php if (isset($_GET['cadastro'])): ?>
+        <p class="sucesso">Conta criada. Agora você já pode entrar.</p>
+    <?php endif; ?>
+    <?php if ($erro !== ''): ?>
+        <p class="erro"><?= escapar($erro) ?></p>
+    <?php endif; ?>
+    <label for="email">E-mail</label>
+    <input type="email" id="email" name="email" required>
+    <label for="senha">Senha</label>
+    <input type="password" id="senha" name="senha" required>
+    <button type="submit">Entrar</button>
+    <p>Ainda não tem conta? <a href="cadastro.php">Cadastrar</a></p>
+    <p><a href="lista.php">Voltar ao fórum</a></p>
+</form>
+</body>
+</html>
